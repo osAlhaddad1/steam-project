@@ -1,6 +1,9 @@
 import tkinter as tk
 import json
 from tkinter import messagebox
+import psycopg2
+import bcrypt
+import random
 
 def load_steam_data():
     with open("steam.json", "r") as file:
@@ -39,6 +42,73 @@ def open_game_details(game_data):
     back_button = tk.Button(details_window, text="Terug naar Shop", command=details_window.destroy, bg="#81a1c1",
                             fg="white", font=("Helvetica", 10), relief="flat")
     back_button.pack(pady=20)
+
+
+# Laad alle games uit je steam.json bestand
+def load_steam_data():
+    with open("steam.json", "r") as file:
+        return json.load(file)
+
+
+# Filter games met average_playtime van 0 en randomiseer ze
+def get_promotional_games(steam_data):
+    # Filter games die een gemiddelde speeltijd van 0 hebben
+    filtered_games = [game for game in steam_data if game.get("average_playtime", 0) == 0]
+
+    # Randomiseer de lijst van games
+    random.shuffle(filtered_games)
+
+    # Geef de eerste 5 games
+    return filtered_games[:5]
+
+
+# Toon de details van een geselecteerde game
+def open_game_details(game_data):
+    details_window = tk.Toplevel(root)
+    details_window.title(game_data["name"])
+    details_window.geometry("600x400")
+    details_window.config(bg="#2e3440")
+
+    game_title = tk.Label(details_window, text=game_data["name"], font=("Helvetica", 18), fg="white", bg="#2e3440")
+    game_title.pack(pady=10)
+
+    game_details = f"Release Date: {game_data['release_date']}\n" \
+                   f"Developer: {game_data['developer']}\n" \
+                   f"Publisher: {game_data['publisher']}\n" \
+                   f"Platforms: {game_data['platforms']}\n" \
+                   f"Genres: {game_data['genres']}\n" \
+                   f"Price: ${game_data['price']}\n" \
+                   f"Achievements: {game_data['achievements']}\n" \
+                   f"Positive Ratings: {game_data['positive_ratings']}\n" \
+                   f"Negative Ratings: {game_data['negative_ratings']}\n" \
+                   f"Steam Tags: {game_data['steamspy_tags']}"
+
+    game_info = tk.Label(details_window, text=game_details, font=("Helvetica", 12), fg="white", bg="#2e3440")
+    game_info.pack(padx=20, pady=20)
+
+    back_button = tk.Button(details_window, text="Terug naar Dashboard", command=details_window.destroy, bg="#81a1c1",
+                            fg="white", font=("Helvetica", 10), relief="flat")
+    back_button.pack(pady=20)
+
+
+# Maak een functie om de promotionele games te tonen op het dashboard
+def show_promotional_games():
+    steam_data = load_steam_data()  # Laad de data uit steam.json
+    promotional_games = get_promotional_games(steam_data)  # Verkrijg de promotionele games
+
+    promo_frame = tk.Frame(root, bg="#2e3440")
+    promo_frame.pack(fill="x", padx=20, pady=10)
+
+    promo_title = tk.Label(promo_frame, text="Promotionele Games", font=("Helvetica", 16), fg="white", bg="#2e3440")
+    promo_title.pack(pady=10)
+
+    # Voeg de promotionele games toe aan het frame en maak ze klikbaar
+    for game in promotional_games:
+        promo_game_label = tk.Label(promo_frame, text=f"{game['name']} - ${game['price']}", font=("Helvetica", 12),
+                                    fg="white", bg="#2e3440")
+        promo_game_label.pack(pady=5)
+
+        promo_game_label.bind("<Button-1>", lambda event, game=game: open_game_details(game))  # Maak de label klikbaar
 
 
 def open_shop():
@@ -175,19 +245,106 @@ def update_energy_usage():
 
 
 def load_users():
-    with open("users.json", "r") as file:
-        return json.load(file)["users"]
+    # Maak verbinding met de database
+    connection_string = "host='20.162.218.244' dbname='steamdatabase' user='postgres' password='Diana112????'"
+    conn = psycopg2.connect(connection_string)
+    cursor = conn.cursor()
+
+    # Query om gebruikers op te halen
+    query = "SELECT gebruikersnaam, wachtwoord FROM Klant"
+    cursor.execute(query)
+
+    # Haal alle gebruikers op en zet ze om in een lijst van dictionaries
+    users = cursor.fetchall()
+    user_list = [{"username": user[0], "password": user[1]} for user in users]
+
+    # Sluit de verbinding
+    conn.close()
+
+    return user_list
+
+
+def show_signup(parent):
+    signup_window = tk.Toplevel(parent)
+    signup_window.title("Account Aanmaken")
+    signup_window.geometry("300x300")
+    signup_window.resizable(False, False)
+    signup_window.config(bg="#2e3440")
+
+    username_label = tk.Label(signup_window, text="Username:", fg="#d8dee9", bg="#2e3440")
+    username_label.pack(pady=5)
+    username_entry = tk.Entry(signup_window, width=25, bg="#3b4252", fg="#d8dee9", insertbackground="#d8dee9")
+    username_entry.pack(pady=5)
+
+    password_label = tk.Label(signup_window, text="Password:", fg="#d8dee9", bg="#2e3440")
+    password_label.pack(pady=5)
+    password_entry = tk.Entry(signup_window, show="*", width=25, bg="#3b4252", fg="#d8dee9", insertbackground="#d8dee9")
+    password_entry.pack(pady=5)
+
+    confirm_password_label = tk.Label(signup_window, text="Confirm Password:", fg="#d8dee9", bg="#2e3440")
+    confirm_password_label.pack(pady=5)
+    confirm_password_entry = tk.Entry(signup_window, show="*", width=25, bg="#3b4252", fg="#d8dee9",
+                                      insertbackground="#d8dee9")
+    confirm_password_entry.pack(pady=5)
+
+    def create_account():
+        username = username_entry.get()
+        password = password_entry.get()
+        confirm_password = confirm_password_entry.get()
+
+        if password != confirm_password:
+            messagebox.showerror("Fout", "Wachtwoorden komen niet overeen!")
+            return
+
+        # Check of de username al bestaat
+        users = load_users()
+        if any(user['username'] == username for user in users):
+            messagebox.showerror("Fout", "Deze gebruikersnaam is al in gebruik!")
+            return
+
+        # Voeg de nieuwe gebruiker toe aan de database
+        add_user_to_db(username, password)
+        messagebox.showinfo("Succes", "Account is succesvol aangemaakt!")
+        signup_window.destroy()
+
+    signup_button = tk.Button(signup_window, text="Account Aanmaken", command=create_account, bg="#81a1c1", fg="white")
+    signup_button.pack(pady=10)
+
+    back_button = tk.Button(signup_window, text="Terug naar Login", command=signup_window.destroy, bg="#81a1c1",
+                            fg="white")
+    back_button.pack(pady=10)
+
+import bcrypt
+
+def add_user_to_db(username, password):
+    # Verbinding maken met de database
+    connection_string = "host='20.162.218.244' dbname='steamdatabase' user='postgres' password='Diana112????'"
+    conn = psycopg2.connect(connection_string)
+    cursor = conn.cursor()
+
+    # Voeg de nieuwe gebruiker toe aan de database zonder hashing
+    query = "INSERT INTO Klant (gebruikersnaam, wachtwoord) VALUES (%s, %s)"
+    cursor.execute(query, (username, password))
+
+    # Commit de wijziging en sluit de verbinding
+    conn.commit()
+    conn.close()
+
+
 
 def validate_login(parent, username_entry, password_entry):
     users = load_users()
     userid = username_entry.get()
     password = password_entry.get()
+
     for user in users:
         if user["username"] == userid and user["password"] == password:
             parent.destroy()
             start_dashboard()
             return
+
     messagebox.showerror("Login Failed", "Invalid username or password")
+
 
 def toggle_password(password_entry, show_var):
     if show_var.get():
@@ -197,6 +354,7 @@ def toggle_password(password_entry, show_var):
 
 def forgot_password():
     messagebox.showinfo("Forgot Password", "Pech!")
+
 
 def show_login():
     login_window = tk.Tk()
@@ -218,11 +376,22 @@ def show_login():
         command=lambda: toggle_password(password_entry, show_var), fg="#d8dee9", bg="#2e3440", selectcolor="#3b4252"
     )
     show_password_check.pack(pady=5)
-    login_button = tk.Button(login_window, text="Login", command=lambda: validate_login(login_window, username_entry, password_entry), bg="#81a1c1", fg="white", width=10)
+    login_button = tk.Button(login_window, text="Login",
+                             command=lambda: validate_login(login_window, username_entry, password_entry), bg="#81a1c1",
+                             fg="white", width=10)
     login_button.pack(pady=10)
-    forgot_button = tk.Button(login_window, text="Forgot Password?", command=forgot_password, bg="#2e3440", fg="#88c0d0", borderwidth=0)
+
+    # Voeg de "Account Aanmaken" knop toe
+    signup_button = tk.Button(login_window, text="Account Aanmaken", command=lambda: show_signup(login_window),
+                              bg="#88c0d0", fg="black", width=20)
+    signup_button.pack(pady=5)
+
+    forgot_button = tk.Button(login_window, text="Forgot Password?", command=forgot_password, bg="#2e3440",
+                              fg="#88c0d0", borderwidth=0)
     forgot_button.pack(pady=5)
+
     login_window.mainloop()
+
 
 def start_dashboard():
     global root
@@ -255,6 +424,8 @@ def start_dashboard():
     dashboard_title = tk.Label(root, text="Welkom op je Steam Dashboard!", font=("Helvetica", 20), fg="#eceff4",
                                bg="#2e3440")
     dashboard_title.pack(pady=20)
+
+    show_promotional_games()
 
     footer = tk.Label(root, text="© 2024 Steam Dashboard", font=("Helvetica", 10), fg="#4c566a",
                       bg="#2e3440")

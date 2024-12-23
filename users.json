@@ -1,6 +1,12 @@
-{
-    "users": [
-        {"username": "lotfi", "password": "password"},
-        {"username": "user1", "password": "mypassword"}
-    ]
-}
+//{
+//  "users": [
+//    {
+//      "username": "lotfi",
+//      "password": "password"
+//    },
+//    {
+//      "username": "janedoe",
+//      "password_hash": "$2a$12$Gr25hs65kdfhwdf..hashedpasswordhere..SlJK25XQg=="
+//    }
+//  ]
+//}
